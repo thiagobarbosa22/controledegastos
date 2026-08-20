@@ -165,8 +165,14 @@ teste('store grava e os totais fecham', async () => {
   assert.strictEqual(U.round2(r.despesas), 700, 'mercado 300 + parcela 400');
   assert.strictEqual(U.round2(r.economia), U.round2(r.receitas - r.despesas));
 
-  // saldo = inicial + recebido - pago
-  assert.strictEqual(U.round2(CF.store.saldoAtual()), 5300);
+  // saldo = inicial + recebido - pago em conta.
+  // a parcela no crédito NÃO entra: ela está na fatura aberta, que ainda não venceu
+  assert.strictEqual(U.round2(CF.store.saldoAtual()), 5700);
+
+  // e a parcela da fatura aberta não é "atrasada" só porque a compra já passou
+  const parcela = CF.store.state.transacoes.find(t => t.cartaoId === cartao.id);
+  assert.strictEqual(parcela.status, 'pendente', 'compra no crédito não nasce paga');
+  assert.strictEqual(CF.store.statusReal(parcela), 'pendente');
 
   const cats = CF.store.porCategoria('despesa');
   assert.ok(Math.abs(U.sum(cats, c => c.pct) - 100) < 0.5, 'os percentuais devem somar 100%');
@@ -178,8 +184,25 @@ teste('store grava e os totais fecham', async () => {
 
   const compra = CF.store.comprasComProgresso()[0];
   assert.strictEqual(compra.parcelasGeradas, 12);
-  assert.strictEqual(U.round2(compra.pago), 400);
-  assert.strictEqual(U.round2(compra.restante), 4400);
+  assert.strictEqual(U.round2(compra.pago), 0, 'nada foi pago até a fatura vencer');
+  assert.strictEqual(U.round2(compra.restante), 4800);
+});
+
+teste('a fatura só reduz o saldo depois de quitada', async () => {
+  const cartao = CF.store.state.cartoes[0];
+  const antes = CF.store.saldoAtual();
+  const f = CF.store.fatura(cartao.id, CF.engine.faturaDe(U.today(), cartao));
+
+  assert.ok(f.total > 0, 'a fatura aberta precisa ter lançamentos');
+  assert.strictEqual(U.round2(CF.store.saldoAte(U.addDays(f.vencimento, -1))), U.round2(antes),
+    'antes do vencimento o dinheiro ainda está na conta');
+
+  for (const t of f.itens) await CF.store.atualizar('transacoes', t.id, { status: 'pago' });
+
+  assert.strictEqual(U.round2(CF.store.saldoAte(f.vencimento)), U.round2(antes - f.total),
+    'quitada, a fatura sai do saldo no vencimento');
+  assert.strictEqual(U.round2(CF.store.saldoAtual()), U.round2(antes),
+    'e continua fora do saldo de hoje, que é anterior ao vencimento');
 });
 
 teste('excluir a compra remove todas as parcelas', async () => {

@@ -13,6 +13,18 @@ CF.engine = (function () {
 
   const chave = (origemTipo, origemId, data) => `${origemTipo}:${origemId}:${data}`;
 
+  /**
+   * Um lançamento derivado já nasce quitado?
+   * No débito/pix/dinheiro, sim, assim que a data chega. No crédito, não:
+   * ele entra na fatura em aberto e só está pago depois que essa fatura
+   * vence — antes disso o dinheiro ainda não saiu da conta.
+   */
+  function statusInicial(data, cartao) {
+    const U = u();
+    if (!cartao) return data <= U.today() ? 'pago' : 'pendente';
+    return datasFatura(faturaDe(data, cartao), cartao).vencimento < U.today() ? 'pago' : 'pendente';
+  }
+
   /** Fim do horizonte de geração: último dia de (mês atual + `meses`). */
   function horizonte(meses = 2) {
     return u().monthEnd(u().addMonthKey(u().monthOf(u().today()), meses));
@@ -20,9 +32,10 @@ CF.engine = (function () {
 
   /* ---------------- Assinaturas ---------------- */
 
-  function cobrancasAssinatura(a, existentes, ate) {
+  function cobrancasAssinatura(a, existentes, ate, cartoes) {
     const U = u();
     if (a.status !== 'ativa') return [];
+    const cartao = a.cartaoId ? (cartoes || []).find(c => c.id === a.cartaoId) : null;
     const passo = CF.catalog.recorrencia(a.periodicidade || 'mensal');
     const novas = [];
     let data = a.proximaCobranca || a.dataInicio || U.today();
@@ -48,7 +61,7 @@ CF.engine = (function () {
           formaPagamento: a.formaPagamento || 'credito',
           contaId: a.contaId || '',
           cartaoId: a.cartaoId || '',
-          status: data <= U.today() ? 'pago' : 'pendente',
+          status: statusInicial(data, cartao),
           observacao: '',
           origemTipo: 'assinatura',
           origemId: a.id,
@@ -162,7 +175,7 @@ CF.engine = (function () {
    * Gera as N parcelas de uma compra. Ajusta centavos na última
    * parcela para o somatório bater exatamente com o valor total.
    */
-  function gerarParcelas(compra) {
+  function gerarParcelas(compra, cartao) {
     const U = u();
     const n = Math.max(1, Number(compra.parcelas) || 1);
     const total = U.round2(Number(compra.valorTotal) || 0);
@@ -184,7 +197,7 @@ CF.engine = (function () {
         formaPagamento: compra.formaPagamento || (compra.cartaoId ? 'credito' : 'debito'),
         contaId: compra.contaId || '',
         cartaoId: compra.cartaoId || '',
-        status: data <= U.today() ? 'pago' : 'pendente',
+        status: statusInicial(data, compra.cartaoId ? cartao : null),
         observacao: compra.observacao || '',
         origemTipo: 'compra',
         origemId: compra.id,
@@ -208,7 +221,7 @@ CF.engine = (function () {
     const existentes = new Set((state.transacoes || []).map(t => t.competencia).filter(Boolean));
     const novas = [];
 
-    for (const a of state.assinaturas || []) novas.push(...cobrancasAssinatura(a, existentes, limite));
+    for (const a of state.assinaturas || []) novas.push(...cobrancasAssinatura(a, existentes, limite, state.cartoes));
     for (const c of state.contasFixas || []) novas.push(...cobrancasContaFixa(c, existentes, limite));
     for (const t of state.transacoes || []) {
       if (t.recorrencia && t.recorrencia !== 'unica' && t.origemTipo !== 'recorrencia') {

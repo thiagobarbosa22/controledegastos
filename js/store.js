@@ -156,10 +156,14 @@ CF.store = (function () {
     return U.sortBy(lista, t => t.data + (t.criadoEm || ''), -1);
   }
 
-  /** Pendente com data passada vira "atrasado". */
+  /**
+   * Pendente com data passada vira "atrasado". No crédito o prazo é o
+   * vencimento da fatura, não a data da compra: comprar dia 10 não está
+   * atrasado no dia 20 se a fatura só vence no mês que vem.
+   */
   function statusReal(t) {
     if (t.status === 'pago') return 'pago';
-    return t.data < U.today() ? 'atrasado' : 'pendente';
+    return dataDeCaixa(t) < U.today() ? 'atrasado' : 'pendente';
   }
 
   /** Resumo financeiro de um intervalo. */
@@ -179,7 +183,7 @@ CF.store = (function () {
     return {
       receitas, despesas, receitasPagas, despesasPagas,
       comprometido,
-      atrasado: U.sum(pendentes.filter(t => t.data < U.today()), t => t.valor),
+      atrasado: U.sum(pendentes.filter(t => statusReal(t) === 'atrasado'), t => t.valor),
       economia,
       taxaEconomia: receitas ? (economia / receitas) * 100 : 0,
       qtdTransacoes: lista.length,
@@ -188,13 +192,34 @@ CF.store = (function () {
     };
   }
 
-  /** Saldo consolidado até uma data (padrão: hoje). */
+  /** O lançamento vai para a fatura de um cartão de crédito? */
+  const noCartao = (t) => Boolean(t.cartaoId) || t.formaPagamento === 'credito';
+
+  /**
+   * Data em que o dinheiro de um lançamento de cartão realmente sai da conta:
+   * o vencimento da fatura que o engloba. Sem cartão cadastrado, cai na
+   * própria data do lançamento.
+   */
+  function dataDeCaixa(t) {
+    if (!noCartao(t)) return t.data;
+    const c = cartao(t.cartaoId);
+    if (!c) return t.data;
+    return CF.engine.datasFatura(CF.engine.faturaDe(t.data, c), c).vencimento;
+  }
+
+  const liquido = (arr) =>
+    U.sum(arr.filter(t => t.tipo === 'receita'), t => t.valor)
+    - U.sum(arr.filter(t => t.tipo === 'despesa'), t => t.valor);
+
+  /**
+   * Saldo consolidado até uma data (padrão: hoje).
+   * Compra no crédito não tira dinheiro da conta na hora: ela compõe a fatura
+   * e só reduz o saldo quando essa fatura é paga, no vencimento dela.
+   */
   function saldoAte(data = U.today()) {
     const inicial = U.sum(state.contas.filter(c => c.ativo !== false), c => c.saldoInicial);
-    const mov = state.transacoes.filter(t => t.data <= data && t.status === 'pago');
-    return inicial
-      + U.sum(mov.filter(t => t.tipo === 'receita'), t => t.valor)
-      - U.sum(mov.filter(t => t.tipo === 'despesa'), t => t.valor);
+    const pagas = state.transacoes.filter(t => t.status === 'pago');
+    return inicial + liquido(pagas.filter(t => dataDeCaixa(t) <= data));
   }
 
   const saldoAtual = () => saldoAte(U.today());
@@ -202,10 +227,9 @@ CF.store = (function () {
   /** Saldo por conta bancária/carteira. */
   function saldoContas() {
     return state.contas.map(c => {
-      const mov = state.transacoes.filter(t => t.contaId === c.id && t.status === 'pago');
-      const saldo = c.saldoInicial
-        + U.sum(mov.filter(t => t.tipo === 'receita'), t => t.valor)
-        - U.sum(mov.filter(t => t.tipo === 'despesa'), t => t.valor);
+      // o que foi no crédito pertence à fatura do cartão, não a esta conta
+      const mov = state.transacoes.filter(t => t.contaId === c.id && t.status === 'pago' && !noCartao(t));
+      const saldo = c.saldoInicial + liquido(mov);
       return Object.assign({}, c, { saldo, movimentos: mov.length });
     });
   }
@@ -613,7 +637,7 @@ CF.store = (function () {
   /** Cria a compra e já lança todas as parcelas no ledger. */
   async function criarCompra(dados) {
     const compra = await criar('compras', dados);
-    const parcelas = CF.engine.gerarParcelas(compra);
+    const parcelas = CF.engine.gerarParcelas(compra, cartao(compra.cartaoId));
     const criadas = await CF.api.createMany('transacoes', parcelas);
     state.transacoes.push(...criadas);
     normalizar();
@@ -633,7 +657,7 @@ CF.store = (function () {
     const pagasPorNumero = new Set(antigas.filter(t => t.status === 'pago').map(t => t.parcelaNum));
     for (const p of antigas) await excluir('transacoes', p.id);
     const compra = await atualizar('compras', id, dados);
-    const novas = CF.engine.gerarParcelas(compra).map(p =>
+    const novas = CF.engine.gerarParcelas(compra, cartao(compra.cartaoId)).map(p =>
       pagasPorNumero.has(p.parcelaNum) ? Object.assign(p, { status: 'pago' }) : p);
     const criadas = await CF.api.createMany('transacoes', novas);
     state.transacoes.push(...criadas);
