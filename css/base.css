@@ -1,0 +1,104 @@
+/* ============================================================
+   Reset + fundamentos
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: var(--fs-md);
+  line-height: 1.5;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background var(--t) var(--ease), color var(--t) var(--ease);
+}
+
+h1, h2, h3, h4, p, figure { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; background: none; border: none; padding: 0; }
+a { color: inherit; text-decoration: none; }
+img, svg { display: block; max-width: 100%; }
+table { border-collapse: collapse; width: 100%; }
+
+:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+  border-radius: var(--r-xs);
+}
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: var(--r-full);
+  border: 3px solid var(--bg);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--text-3); }
+
+/* ---- Tipografia utilitária ---- */
+.h1 { font-size: var(--fs-2xl); font-weight: 700; letter-spacing: -.02em; }
+.h2 { font-size: var(--fs-xl); font-weight: 660; letter-spacing: -.015em; }
+.h3 { font-size: var(--fs-lg); font-weight: 620; letter-spacing: -.01em; }
+.muted { color: var(--text-2); }
+.dim { color: var(--text-3); }
+.tiny { font-size: var(--fs-xs); }
+.small { font-size: var(--fs-sm); }
+.bold { font-weight: 640; }
+.num { font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.uppercase { text-transform: uppercase; letter-spacing: .07em; font-size: var(--fs-xs); font-weight: 640; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.income { color: var(--income); }
+.expense { color: var(--expense); }
+.text-warning { color: var(--warning); }
+.center { text-align: center; }
+.right { text-align: right; }
+
+/* ---- Layout utilitário ---- */
+.row { display: flex; align-items: center; gap: var(--s-3); }
+.row-between { display: flex; align-items: center; justify-content: space-between; gap: var(--s-3); }
+.col { display: flex; flex-direction: column; }
+.wrap { flex-wrap: wrap; }
+.grow { flex: 1; min-width: 0; }
+.gap-1 { gap: var(--s-1); } .gap-2 { gap: var(--s-2); }
+.gap-3 { gap: var(--s-3); } .gap-4 { gap: var(--s-4); }
+.gap-6 { gap: var(--s-6); }
+.mt-2 { margin-top: var(--s-2); } .mt-4 { margin-top: var(--s-4); }
+.mt-6 { margin-top: var(--s-6); } .mb-4 { margin-bottom: var(--s-4); }
+.hidden { display: none !important; }
+
+.grid { display: grid; gap: var(--s-4); }
+.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.grid-auto { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+
+/* ---- Animações base ---- */
+@keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
+@keyframes rise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+@keyframes pop { from { opacity: 0; transform: scale(.94) translateY(8px) } to { opacity: 1; transform: none } }
+@keyframes slide-up { from { transform: translateY(100%) } to { transform: none } }
+@keyframes spin { to { transform: rotate(360deg) } }
+@keyframes shimmer { 100% { transform: translateX(100%) } }
+@keyframes bar-grow { from { width: 0 !important } }
+
+.anim-rise { animation: rise var(--t-slow) var(--ease-out) both; }
+.stagger > * { animation: rise var(--t-slow) var(--ease-out) both; }
+.stagger > *:nth-child(1) { animation-delay: 20ms }
+.stagger > *:nth-child(2) { animation-delay: 60ms }
+.stagger > *:nth-child(3) { animation-delay: 100ms }
+.stagger > *:nth-child(4) { animation-delay: 140ms }
+.stagger > *:nth-child(5) { animation-delay: 180ms }
+.stagger > *:nth-child(6) { animation-delay: 220ms }
+.stagger > *:nth-child(n+7) { animation-delay: 260ms }
+
+/* ---- Ícones (Lucide) ---- */
+.icon { width: 18px; height: 18px; stroke-width: 2; flex: none; }
+.icon-sm { width: 15px; height: 15px; }
+.icon-lg { width: 22px; height: 22px; }
+.icon-xl { width: 30px; height: 30px; }

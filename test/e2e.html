@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Teste de interface</title>
+<style>body{font:14px/1.6 monospace;padding:24px;background:#0b0f1c;color:#e2e8f0}
+.ok{color:#34d399}.fail{color:#fb7185}iframe{width:1280px;height:900px;border:1px solid #333;margin-top:24px}</style>
+</head>
+<body>
+<h1>Teste de interface — fluxos reais no DOM</h1>
+<pre id="log">executando…</pre>
+<iframe id="app" src="../index.html#/dashboard"></iframe>
+
+<script>
+/* Percorre os fluxos que só existem no navegador: abrir modal, preencher
+   formulário, salvar, filtrar, editar e excluir. */
+const log = document.getElementById('log');
+const linhas = [];
+let falhas = 0;
+
+function ok(nome) { linhas.push('  ✓ ' + nome); render(); }
+function falha(nome, e) { falhas++; linhas.push('  ✗ ' + nome + ' — ' + (e && e.message || e)); render(); }
+function render() { log.innerHTML = linhas.map(l => `<span class="${l[2] === '✓' ? 'ok' : 'fail'}">${l}</span>`).join('\n'); }
+const espera = (ms) => new Promise(r => setTimeout(r, ms));
+
+async function ate(cond, msg, limite = 6000) {
+  const t0 = Date.now();
+  while (Date.now() - t0 < limite) {
+    const v = cond();
+    if (v) return v;
+    await espera(60);
+  }
+  throw new Error('tempo esgotado: ' + msg);
+}
+
+async function teste(nome, fn) {
+  try { await fn(); ok(nome); }
+  catch (e) { falha(nome, e); }
+}
+
+const frame = document.getElementById('app');
+
+(async function () {
+  const w = await ate(() => frame.contentWindow && frame.contentWindow.CF && frame.contentWindow.CF.store, 'app carregar');
+  const d = frame.contentWindow.document;
+  const CF = frame.contentWindow.CF;
+  await ate(() => !CF.store.state.carregando, 'dados carregarem');
+  const clique = (el) => el.dispatchEvent(new frame.contentWindow.MouseEvent('click', { bubbles: true }));
+  const digitar = (el, v) => {
+    el.value = v;
+    el.dispatchEvent(new frame.contentWindow.Event('input', { bubbles: true }));
+    el.dispatchEvent(new frame.contentWindow.Event('change', { bubbles: true }));
+  };
+
+  await teste('primeiro acesso mostra os primeiros passos, não um painel zerado', async () => {
+    if (CF.store.state.transacoes.length) throw new Error('deveria começar sem dados');
+    // o primeiro render é agendado: espera a tela sair do skeleton
+    await ate(() => d.getElementById('view').textContent.indexOf('Primeiros passos') >= 0,
+      'tela de boas-vindas aparecer');
+    if (!d.querySelector('[data-act="novo-cartao"]')) throw new Error('atalho de cadastrar cartão ausente');
+  });
+
+  await teste('cadastro inicial de conta e cartão pelo formulário', async () => {
+    await CF.store.criar('contas', { nome: 'Conta teste', saldoInicial: 2000, ativo: true });
+    await CF.store.criar('cartoes', {
+      nome: 'Cartão teste', banco: 'Banco teste', limite: 5000,
+      diaFechamento: 20, diaVencimento: 27, final: '4321', ativo: true
+    });
+    await CF.store.criarTransacao({
+      tipo: 'receita', descricao: 'Salário', valor: 5000, categoria: 'salario',
+      data: CF.utils.today(), status: 'pago'
+    });
+    await espera(320);
+    const cards = d.querySelectorAll('.metric');
+    if (cards.length < 7) throw new Error('o dashboard normal deveria aparecer; achei ' + cards.length + ' cards');
+    if (!d.querySelector('#ch-evolucao')) throw new Error('gráfico de evolução ausente');
+  });
+
+  await teste('botão "Despesa" abre o modal de nova despesa', async () => {
+    clique(d.querySelector('[data-act="nova-despesa"]'));
+    await ate(() => d.querySelector('.modal'), 'modal abrir');
+    if (!d.querySelector('#f-descricao')) throw new Error('campo descrição ausente');
+    if (!d.querySelector('#f-valor')) throw new Error('campo valor ausente');
+  });
+
+  await teste('validação bloqueia o salvamento sem descrição', async () => {
+    clique(d.querySelector('[data-salvar]'));
+    await espera(150);
+    if (!d.querySelector('.field.has-error')) throw new Error('deveria marcar erro');
+    if (!d.querySelector('.modal')) throw new Error('modal não podia fechar');
+  });
+
+  let idCriado = null;
+  await teste('salvar cria a transação e fecha o modal', async () => {
+    const antes = CF.store.state.transacoes.length;
+    digitar(d.querySelector('#f-descricao'), 'Teste automatizado');
+    digitar(d.querySelector('#f-valor'), '123,45');
+    digitar(d.querySelector('#f-categoria'), 'mercado');
+    digitar(d.querySelector('#f-data'), CF.utils.today());
+    clique(d.querySelector('[data-salvar]'));
+    await ate(() => CF.store.state.transacoes.length === antes + 1, 'transação ser criada');
+    await ate(() => !d.querySelector('.modal'), 'modal fechar');
+    const nova = CF.store.state.transacoes.find(t => t.descricao === 'Teste automatizado');
+    if (!nova) throw new Error('transação não encontrada no estado');
+    if (nova.valor !== 123.45) throw new Error('valor gravado errado: ' + nova.valor);
+    if (nova.categoria !== 'mercado') throw new Error('categoria errada: ' + nova.categoria);
+    if (!/^TRX-/.test(nova.id)) throw new Error('id fora do padrão: ' + nova.id);
+    idCriado = nova.id;
+  });
+
+  await teste('toast de sucesso aparece', async () => {
+    await ate(() => d.querySelector('.toast.is-success'), 'toast');
+  });
+
+  await teste('o valor persiste no localStorage', async () => {
+    const db = JSON.parse(frame.contentWindow.localStorage.getItem('cf:db'));
+    if (!db.transacoes.some(t => t.id === idCriado)) throw new Error('não persistiu');
+  });
+
+  await teste('dashboard recalcula o total de despesas', async () => {
+    await espera(300);
+    const texto = d.querySelector('[data-count="despesas"]').textContent;
+    if (!texto.includes('R$')) throw new Error('valor não formatado: ' + texto);
+  });
+
+  await teste('extrato lista e filtra por descrição', async () => {
+    frame.contentWindow.location.hash = '#/transacoes';
+    await ate(() => d.querySelector('#f-busca'), 'tela de movimentações');
+    digitar(d.querySelector('#f-busca'), 'Teste automatizado');
+    // o filtro tem debounce e redesenha a tabela: espera o resultado, não o relógio
+    const unica = await ate(() => {
+      const rows = d.querySelectorAll('.table tbody tr');
+      return rows.length === 1 ? rows[0] : null;
+    }, 'filtro ser aplicado');
+    if (unica.dataset.id !== idCriado) throw new Error('filtrou a linha errada');
+    if (!unica.textContent.includes('123,45')) throw new Error('linha sem o valor');
+  });
+
+  await teste('menu de ações da linha abre', async () => {
+    const linha = await ate(() => d.querySelector(`.table tbody tr[data-id="${idCriado}"]`), 'linha filtrada');
+    clique(linha.querySelector('[data-act="menu-txn"]'));
+    await ate(() => d.querySelector('.dropdown-menu'), 'dropdown');
+    const itens = [...d.querySelectorAll('.dropdown-item')].map(b => b.textContent.trim());
+    ['Visualizar', 'Editar', 'Duplicar', 'Excluir'].forEach(esperado => {
+      if (!itens.some(i => i.indexOf(esperado) >= 0)) throw new Error('faltou a ação ' + esperado);
+    });
+  });
+
+  await teste('excluir pede confirmação e remove o registro', async () => {
+    const alvo = [...d.querySelectorAll('.dropdown-item')].find(b => b.textContent.indexOf('Excluir') >= 0);
+    clique(alvo);
+    await ate(() => d.querySelector('[data-yes]'), 'confirmação');
+    clique(d.querySelector('[data-yes]'));
+    await ate(() => !CF.store.state.transacoes.some(t => t.id === idCriado), 'remoção do registro');
+  });
+
+  await teste('compra parcelada gera todas as parcelas', async () => {
+    const antes = CF.store.state.transacoes.length;
+    await CF.store.criarCompra({
+      tipo: 'parcelada', produto: 'Compra de teste', valorTotal: 1200, parcelas: 6,
+      valorParcela: 200, dataCompra: CF.utils.today(), primeiraParcela: CF.utils.today(),
+      categoria: 'tecnologia', formaPagamento: 'credito', cartaoId: CF.store.state.cartoes[0].id
+    });
+    if (CF.store.state.transacoes.length !== antes + 6) throw new Error('esperava 6 parcelas novas');
+    const compra = CF.store.comprasComProgresso().find(c => c.produto === 'Compra de teste');
+    if (Math.abs(compra.pago + compra.restante - 1200) > 0.01) throw new Error('progresso inconsistente');
+    await CF.store.excluirCompra(compra.id);
+    if (CF.store.state.transacoes.length !== antes) throw new Error('parcelas não foram removidas junto');
+  });
+
+  await teste('comando rápido interpreta "Uber 32 reais"', async () => {
+    const p = CF.app.interpretar('Uber 32 reais');
+    if (p.valor !== 32) throw new Error('valor: ' + p.valor);
+    if (p.categoria !== 'transporte') throw new Error('categoria: ' + p.categoria);
+    if (p.tipo !== 'despesa') throw new Error('tipo: ' + p.tipo);
+    const r = CF.app.interpretar('recebi 1500 de freela ontem');
+    if (r.tipo !== 'receita') throw new Error('deveria ser receita');
+    if (r.data !== CF.utils.addDays(CF.utils.today(), -1)) throw new Error('data de ontem errada');
+  });
+
+  await teste('troca de tema atualiza o atributo do documento', async () => {
+    const antes = d.documentElement.dataset.theme;
+    CF.app.alternarTema();
+    await espera(200);
+    if (d.documentElement.dataset.theme === antes) throw new Error('tema não mudou');
+    CF.app.alternarTema();
+  });
+
+  await teste('todas as rotas renderizam sem erro', async () => {
+    const rotas = ['dashboard', 'transacoes', 'despesas', 'receitas', 'calendario', 'compras',
+      'assinaturas', 'cartoes', 'contas', 'metas', 'relatorios', 'configuracoes'];
+    for (const r of rotas) {
+      frame.contentWindow.location.hash = '#/' + r;
+      await espera(320);
+      const view = d.getElementById('view');
+      if (!view.children.length) throw new Error('rota vazia: ' + r);
+      if (view.textContent.indexOf('undefined') >= 0) throw new Error('"undefined" visível em ' + r);
+      if (view.textContent.indexOf('NaN') >= 0) throw new Error('"NaN" visível em ' + r);
+    }
+  });
+
+  linhas.push('');
+  linhas.push(falhas ? `RESULTADO: ${falhas} falha(s)` : 'RESULTADO: todos os fluxos passaram');
+  render();
+  document.title = falhas ? 'FALHOU' : 'PASSOU';
+})();
+</script>
+</body>
+</html>

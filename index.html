@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Controle financeiro pessoal — receitas, despesas, assinaturas, cartões, metas e relatórios.">
+<meta name="theme-color" content="#4f46e5">
+<title>Controle Financeiro</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="assets/icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+
+<link rel="stylesheet" href="css/tokens.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/components.css">
+<link rel="stylesheet" href="css/layout.css">
+<link rel="stylesheet" href="css/responsive.css">
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ======================= SIDEBAR ======================= -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="logo-mark"><i data-lucide="wallet-minimal" class="icon-lg"></i></div>
+      <div class="logo-text">Financeiro<small>controle pessoal</small></div>
+    </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-group">
+        <div class="nav-group-label">Principal</div>
+        <a class="nav-item" href="#/dashboard" data-route="dashboard"><i data-lucide="layout-dashboard" class="icon"></i><span>Dashboard</span></a>
+        <a class="nav-item" href="#/transacoes" data-route="transacoes"><i data-lucide="arrow-left-right" class="icon"></i><span>Movimentações</span></a>
+        <a class="nav-item" href="#/calendario" data-route="calendario"><i data-lucide="calendar-days" class="icon"></i><span>Calendário</span></a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Lançamentos</div>
+        <a class="nav-item" href="#/despesas" data-route="despesas"><i data-lucide="trending-down" class="icon"></i><span>Despesas</span></a>
+        <a class="nav-item" href="#/receitas" data-route="receitas"><i data-lucide="trending-up" class="icon"></i><span>Receitas</span></a>
+        <a class="nav-item" href="#/compras" data-route="compras"><i data-lucide="shopping-bag" class="icon"></i><span>Compras</span></a>
+        <a class="nav-item" href="#/assinaturas" data-route="assinaturas"><i data-lucide="repeat" class="icon"></i><span>Assinaturas</span><span class="badge nav-count" data-count="assinaturas"></span></a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Gestão</div>
+        <a class="nav-item" href="#/cartoes" data-route="cartoes"><i data-lucide="credit-card" class="icon"></i><span>Cartões</span></a>
+        <a class="nav-item" href="#/contas" data-route="contas"><i data-lucide="receipt-text" class="icon"></i><span>Contas</span><span class="badge nav-count" data-count="contasPendentes"></span></a>
+        <a class="nav-item" href="#/metas" data-route="metas"><i data-lucide="target" class="icon"></i><span>Metas</span></a>
+      </div>
+
+      <div class="nav-group">
+        <div class="nav-group-label">Análise</div>
+        <a class="nav-item" href="#/relatorios" data-route="relatorios"><i data-lucide="chart-column" class="icon"></i><span>Relatórios</span></a>
+        <a class="nav-item" href="#/configuracoes" data-route="configuracoes"><i data-lucide="settings" class="icon"></i><span>Configurações</span></a>
+      </div>
+    </nav>
+
+    <div class="sidebar-foot">
+      <div class="sidebar-status" id="conn-status" data-tip="Origem dos dados">
+        <span class="status-dot" id="conn-dot"></span>
+        <span class="grow truncate" id="conn-label">Conectando…</span>
+      </div>
+    </div>
+  </aside>
+
+  <div class="nav-backdrop" data-close-nav></div>
+
+  <!-- ======================= CONTEÚDO ======================= -->
+  <div class="main">
+    <header class="topbar">
+      <button class="btn-icon menu-toggle" id="menu-toggle" aria-label="Abrir menu" style="display:none">
+        <i data-lucide="menu" class="icon-lg"></i>
+      </button>
+
+      <div class="period-picker">
+        <button class="period-nav" id="period-prev" aria-label="Período anterior"><i data-lucide="chevron-left" class="icon"></i></button>
+        <button class="period-label" id="period-label" aria-haspopup="menu">
+          <i data-lucide="calendar" class="icon-sm"></i><span>—</span>
+        </button>
+        <button class="period-nav" id="period-next" aria-label="Próximo período"><i data-lucide="chevron-right" class="icon"></i></button>
+      </div>
+
+      <div class="quickbar" id="quickbar">
+        <i data-lucide="sparkles" class="icon-sm quickbar-ico"></i>
+        <input class="input" id="quick-input" type="text" autocomplete="off"
+               placeholder="Lançamento rápido: “Uber 32 reais”">
+        <span class="quickbar-hint">Enter</span>
+      </div>
+
+      <div class="grow"></div>
+
+      <button class="btn-icon" id="alerts-btn" data-tip="Alertas" aria-label="Alertas" style="position:relative">
+        <i data-lucide="bell" class="icon-lg"></i>
+        <span id="alerts-dot" style="position:absolute;top:7px;right:8px;width:8px;height:8px;border-radius:50%;background:var(--expense);display:none"></span>
+      </button>
+      <button class="btn-icon" id="theme-btn" data-tip="Tema" aria-label="Alternar tema"><i data-lucide="moon" class="icon-lg"></i></button>
+      <button class="btn-icon" id="refresh-btn" data-tip="Recarregar" aria-label="Recarregar"><i data-lucide="refresh-cw" class="icon-lg"></i></button>
+
+      <div class="dropdown">
+        <button class="btn btn-primary" id="add-btn"><i data-lucide="plus" class="icon"></i><span>Adicionar</span></button>
+      </div>
+    </header>
+
+    <main class="view" id="view" role="main"></main>
+  </div>
+
+  <!-- ======================= MOBILE ======================= -->
+  <button class="fab" id="fab" aria-label="Adicionar lançamento"><i data-lucide="plus" class="icon-xl"></i></button>
+
+  <nav class="bottomnav">
+    <a class="bottomnav-item" href="#/dashboard" data-route="dashboard"><i data-lucide="layout-dashboard" class="icon"></i>Início</a>
+    <a class="bottomnav-item" href="#/transacoes" data-route="transacoes"><i data-lucide="arrow-left-right" class="icon"></i>Extrato</a>
+    <a class="bottomnav-item" href="#/cartoes" data-route="cartoes"><i data-lucide="credit-card" class="icon"></i>Cartões</a>
+    <a class="bottomnav-item" href="#/relatorios" data-route="relatorios"><i data-lucide="chart-column" class="icon"></i>Relatórios</a>
+  </nav>
+</div>
+
+<div id="modal-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+
+<!-- Bibliotecas externas -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js" defer></script>
+<script src="https://unpkg.com/lucide@0.454.0/dist/umd/lucide.min.js" defer></script>
+
+<!-- Núcleo -->
+<script src="js/utils.js" defer></script>
+<script src="js/config.js" defer></script>
+<script src="js/catalog.js" defer></script>
+<script src="js/engine.js" defer></script>
+<script src="js/api.js" defer></script>
+<script src="js/store.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/forms.js" defer></script>
+<script src="js/charts.js" defer></script>
+
+<!-- Telas -->
+<script src="js/views/dashboard.js" defer></script>
+<script src="js/views/transacoes.js" defer></script>
+<script src="js/views/assinaturas.js" defer></script>
+<script src="js/views/compras.js" defer></script>
+<script src="js/views/cartoes.js" defer></script>
+<script src="js/views/contas.js" defer></script>
+<script src="js/views/calendario.js" defer></script>
+<script src="js/views/metas.js" defer></script>
+<script src="js/views/relatorios.js" defer></script>
+<script src="js/views/configuracoes.js" defer></script>
+
+<script src="js/router.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>

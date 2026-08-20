@@ -1,0 +1,12 @@
+# Sistema
+.DS_Store
+Thumbs.db
+*~
+
+# Editores
+.vscode/
+.idea/
+
+# Backups locais exportados pelo próprio app
+backup-financeiro-*.json
+movimentacoes-*.csv
