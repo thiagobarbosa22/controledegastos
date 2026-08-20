@@ -115,6 +115,14 @@ CF.api = (function () {
      ============================================================ */
   const remoto = (function () {
 
+    // Quando a implantação está errada, o Apps Script devolve uma página de erro
+    // em HTML — sem cabeçalho CORS. O navegador então reporta só "Failed to fetch",
+    // escondendo a causa real. Esta mensagem aponta para o que de fato resolve.
+    const DICA_IMPLANTACAO =
+      'Não foi possível falar com o Google Apps Script. Verifique em ' +
+      'Implantar › Gerenciar implantações se a URL /exec está publicada em uma ' +
+      'versão nova do código, com acesso "Qualquer pessoa".';
+
     async function chamar(acao, payload = {}, tentativa = 0) {
       const url = CF.config.get('apiUrl');
       if (!url) throw new Error('URL da API não configurada');
@@ -130,12 +138,22 @@ CF.api = (function () {
           redirect: 'follow'
         });
         if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        const json = await resp.json();
+
+        const texto = await resp.text();
+        let json;
+        try {
+          json = JSON.parse(texto);
+        } catch {
+          // resposta em HTML = página de erro/login do Apps Script, não a API
+          throw new Error(DICA_IMPLANTACAO);
+        }
         if (json.ok === false) throw new Error(json.erro || 'Erro no servidor');
         return json.dados;
       } catch (e) {
         // uma nova tentativa cobre o cold start do Apps Script
         if (tentativa < 1) return chamar(acao, payload, tentativa + 1);
+        // TypeError do fetch = requisição bloqueada antes de haver resposta
+        if (e instanceof TypeError) throw new Error(DICA_IMPLANTACAO);
         throw e;
       }
     }
